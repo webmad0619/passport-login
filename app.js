@@ -25,7 +25,7 @@ const path = require('path')
 //handlebars templating 
 const hbs = require('hbs')
 //handlebars utilities
-Swag = require('swag');
+const Swag = require('swag');
 //here you boot up swag so it is available in the views (made with handlebars)
 Swag.registerHelpers(hbs);
 
@@ -60,12 +60,18 @@ app.use(bodyParser.urlencoded({
 passport.use(new LocalStrategy({
 	passReqToCallback: true
 }, (req, username, password, next) => {
+	console.log("login")
+	console.log(username)
+	console.log(password)
+
 	User.findOne({
 		username
 	}, (err, user) => {
 		if (err) {
 			return next(err);
 		}
+
+		console.log(user)
 		if (!user) {
 			return next(null, false, {
 				message: "Incorrect username"
@@ -82,22 +88,25 @@ passport.use(new LocalStrategy({
 }));
 
 passport.serializeUser((user, cb) => {
+	console.log("serialize")
+	console.log(user._id)
 	cb(null, user._id);
 });
 
 passport.deserializeUser((id, cb) => {
+	console.log("deserialize")
+	console.log(id)
 	User.findById(id, (err, user) => {
 		if (err) {
 			return cb(err);
 		}
+		console.log(user)
 		cb(null, user);
 	});
 });
 
 app.use(passport.initialize());
 app.use(passport.session());
-
-
 
 app.get('/', ensureLogin.ensureLoggedIn(), (req, res) => {
 	res.render('base', {
@@ -118,19 +127,19 @@ app.post("/signup", (req, res, next) => {
 
 	if (username === "" || password === "") {
 		res.render("base", {
-			message: "Indicate username and password",
+			"message": "Indicate username and password",
 			"section": "signup"
 		});
 		return;
 	}
 
 	User.findOne({
-			username
-		})
+		username
+	})
 		.then(user => {
 			if (user !== null) {
 				res.render("base", {
-					message: "The username already exists",
+					"message": "The username already exists",
 					"section": "signup"
 				});
 				return;
@@ -167,6 +176,8 @@ app.get("/login", (req, res, next) => {
 	});
 });
 
+
+// invoked via passport.use(new LocalStrategy({
 app.post("/login", passport.authenticate("local", {
 	successReturnToOrRedirect: "/",
 	failureRedirect: "/login",
@@ -174,7 +185,41 @@ app.post("/login", passport.authenticate("local", {
 	passReqToCallback: true
 }));
 
+function checkRoles(roles) {
+	return function (req, res, next) {
+		if (req.isAuthenticated() && roles.includes(req.user.role)) {
+			return next();
+		} else {
+			if (req.isAuthenticated()) {
+				res.redirect('/')
+			}	else {
+				res.redirect('/login')
+			}
+		}
+	}
+}
+
+// js curry
+const checkAdminOrEditor = checkRoles(['ADMIN', 'EDITOR']);
+const checkAdmin = checkRoles(['ADMIN']);
+
+app.get("/private-page-admin-editors", checkAdminOrEditor, (req, res) => {
+	res.render("onlyforadminseditors", {
+		user: req.user,
+		"section": "private"
+	});
+});
+
+app.get("/private-page-admin", checkAdmin, (req, res) => {
+	res.render("onlyforadmins", {
+		user: req.user,
+		"section": "private"
+	});
+});
+
 app.get("/private-page", ensureLogin.ensureLoggedIn(), (req, res) => {
+	console.log("private page")
+	console.log(req.session)
 	res.render("base", {
 		user: req.user,
 		"section": "private"
@@ -185,5 +230,8 @@ app.get("/logout", (req, res) => {
 	req.logout();
 	res.redirect("/login");
 });
+
+
+
 
 app.listen(3000)
