@@ -1,1 +1,1 @@
-run it via `nodemon app.js`
+run it via `npm run dev`
